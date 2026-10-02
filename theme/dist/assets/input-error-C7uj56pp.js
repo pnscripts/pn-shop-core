@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-CbXtAM7H.js";import{t}from"./jsx-runtime-CjNMTtgn.js";import{l as n}from"./app-logo-icon-CK-oXN_a.js";var r=e(t(),1);function i({message:e,className:t=``,...i}){return e?(0,r.jsx)(`p`,{...i,className:n(`text-sm text-red-600 dark:text-red-400`,t),children:e}):null}export{i as t};

@@ -1,0 +1,76 @@
+<?php
+
+namespace PnShop\Catalog\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use PnShop\Catalog\Factories\ProductAttributeFactory;
+use PnShop\Localization\Concerns\Translatable;
+use PnShop\Localization\Contracts\TranslatableModel;
+
+class ProductAttribute extends Model implements TranslatableModel
+{
+    /** @use HasFactory<ProductAttributeFactory> */
+    use HasFactory, SoftDeletes, Translatable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'key',           // Internal reference like 'wifi', 'material'
+        'label',         // Translatable label like 'Wi-Fi', 'Material'
+        'type',          // select (one value per product), multiselect or boolean
+        'is_required',
+        'is_filterable', // Offered as a shop filter
+        'position',
+        'translations_input',
+    ];
+
+    /**
+     * The attributes that should be translated.
+     */
+
+    /** @var list<string> */
+    protected array $translatable = ['label'];
+
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_required' => 'boolean',
+        'is_filterable' => 'boolean',
+        'position' => 'integer',
+    ];
+
+    /**
+     * Get the values associated with this product attribute.
+     *
+     * @return HasMany<ProductAttributeValue, $this>
+     */
+    public function values(): HasMany
+    {
+        return $this->hasMany(ProductAttributeValue::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * Get the categories that have this attribute.
+     *
+     * @return BelongsToMany<Category, $this>
+     */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'product_attribute_product_category', 'product_attribute_id', 'product_category_id');
+    }
+
+    protected static function newFactory(): ProductAttributeFactory
+    {
+        return ProductAttributeFactory::new();
+    }
+}
