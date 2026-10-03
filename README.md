@@ -1,7 +1,13 @@
 # pnscripts/pn-shop-core
 
-The PN Shop platform core: modules, storefront and installer, as a Composer package. Shops require it through the `pnscripts/pn-shop` project.
+The core of [PN Shop](https://pnscripts.com/products/pn-shop): the modules, the storefront (with its prebuilt bundle), the admin panel, the APIs and the installer, as a Composer package.
 
-**This repository is read-only.** It is published from [pnscripts/pn-shop-source](https://github.com/pnscripts/pn-shop-source) (`scripts/release/publish.sh`); send issues and pull requests there.
+Shops require it through the `pnscripts/pn-shop` project:
+
+```bash
+composer create-project pnscripts/pn-shop shop
+```
+
+**This repository is read-only.** It is published from [pnscripts/pn-shop-source](https://github.com/pnscripts/pn-shop-source); send issues and pull requests there.
 
 Documentation: <https://github.com/pnscripts/pn-shop-source/tree/main/docs>
