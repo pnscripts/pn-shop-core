@@ -32,6 +32,8 @@ use PnShop\Sales\OrderWorkflow;
 use PnShop\Sales\States\FulfillmentStatus;
 use PnShop\Sales\States\OrderStatus;
 use PnShop\Sales\States\PaymentStatus;
+use PnShop\Sales\StockAllocations;
+use PnShop\Shipping\Carriers\StorePickup;
 use PnShop\Shipping\Models\ShippingMethod;
 use PnShop\Shipping\ShippingRequest;
 use PnShop\Shipping\ShippingService;
@@ -41,6 +43,7 @@ class CheckoutService
 {
     public function __construct(
         private ShoppingCartService $cart,
+        private StockAllocations $allocations,
         private InventoryService $inventory,
         private CartCalculator $calculator,
         private OrderWorkflow $workflow,
@@ -123,6 +126,7 @@ class CheckoutService
             ]);
 
             $items = collect();
+            $orderItems = [];
 
             foreach ($lines as $variantId => $quantity) {
                 $variant = $variants->get($variantId);
@@ -131,16 +135,7 @@ class CheckoutService
                     throw new CheckoutException(__('A product in your cart is no longer available. Please review your cart.'));
                 }
 
-                try {
-                    $this->inventory->reserve($variant, $quantity);
-                } catch (InsufficientStock) {
-                    throw new CheckoutException(__('Not enough stock for :product. Available: :stock.', [
-                        'product' => $variant->product->title,
-                        'stock' => (int) $variant->available(),
-                    ]));
-                }
-
-                OrderItem::create([
+                $orderItems[] = [OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $variant->product_id,
                     'product_variant_id' => $variant->id,
@@ -152,12 +147,26 @@ class CheckoutService
                     // What this customer pays at this quantity; sale_price holds it when it is below the price.
                     'price' => $variant->price,
                     'sale_price' => $variant->isOnSale($quantity) ? $variant->unitPrice($quantity) : null,
-                ]);
+                ]), $variant, $quantity];
 
                 $items->push(CartItemDTO::fromVariant($variant, $quantity));
             }
 
             $shippingMethod = $this->shippingMethod($data, $items, $currency, $shipping, $user);
+
+            // Reserve the units at the locations that will ship them (StockAllocations); for
+            // pickup at a stock location, there.
+            $pickup = StorePickup::stockLocation($shippingMethod);
+
+            foreach ($orderItems as [$orderItem, $variant, $quantity]) {
+                try {
+                    $this->allocations->reserve($orderItem, $variant, $quantity, $shipping->country_code, $pickup);
+                } catch (InsufficientStock) {
+                    throw new CheckoutException($pickup !== null
+                        ? __('Only :stock of :product are available for pickup at :location.', ['product' => $variant->product->title, 'stock' => (int) $this->inventory->availableAt($variant, $pickup), 'location' => $pickup->name])
+                        : __('Not enough stock for :product. Available: :stock.', ['product' => $variant->product->title, 'stock' => (int) $variant->available()]));
+                }
+            }
 
             $totals = $this->calculator->calculate($items, $currency, $this->cart->context([
                 'shipping_address' => $shipping,
