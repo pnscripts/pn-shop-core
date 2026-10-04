@@ -9,6 +9,7 @@ use PnShop\Cart\CartServiceProvider;
 use PnShop\Catalog\CatalogServiceProvider;
 use PnShop\Channel\ChannelServiceProvider;
 use PnShop\Cms\CmsServiceProvider;
+use PnShop\Credit\CreditServiceProvider;
 use PnShop\Customer\CustomerServiceProvider;
 use PnShop\Extension\ExtensionServiceProvider;
 use PnShop\Installer\InstallerServiceProvider;
@@ -33,7 +34,7 @@ final class PnShop
     /**
      * The PN Shop core version. Extensions declare compatibility against it.
      */
-    public const VERSION = '1.5.0';
+    public const VERSION = '1.6.0';
 
     /** The Composer package that holds the core. */
     public const PACKAGE = 'pnscripts/pn-shop-core';
@@ -58,6 +59,7 @@ final class PnShop
         SecurityServiceProvider::class,
         SalesServiceProvider::class,
         PaymentServiceProvider::class,
+        CreditServiceProvider::class,
         ShippingServiceProvider::class,
         TaxServiceProvider::class,
         PromotionServiceProvider::class,
