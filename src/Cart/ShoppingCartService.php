@@ -12,6 +12,8 @@ use PnShop\Cart\Exceptions\CartException;
 use PnShop\Cart\Totals\CartCalculator;
 use PnShop\Cart\Totals\CartTotals;
 use PnShop\Catalog\Models\ProductVariant;
+use PnShop\Catalog\Pricing\PriceDisplay;
+use PnShop\Catalog\Pricing\PriceResolver;
 use PnShop\Inventory\InventoryService;
 use PnShop\Localization\Localization;
 use PnShop\Money\MoneyPresenter;
@@ -43,6 +45,10 @@ class ShoppingCartService
 
     public function addItemToCart(int $variantId, int $quantity): void
     {
+        if (! app(PriceDisplay::class)->visible()) {
+            throw new CartException(__('Please sign in to see prices and order.'));
+        }
+
         $lines = $this->getLines();
 
         $this->assertQuantityAvailable($variantId, ($lines[$variantId] ?? 0) + $quantity);
@@ -89,6 +95,7 @@ class ShoppingCartService
             ->with(['product.media', 'optionValues', 'stockLevels'])
             ->get()
             ->keyBy('id');
+        app(PriceResolver::class)->prime($variants);
 
         return $this->items = collect($lines)
             ->filter(fn (int $quantity, int $variantId) => $variants->has($variantId))
@@ -251,6 +258,8 @@ class ShoppingCartService
             'totals' => $totals->toArray(),
             // {code, valid, applied, message} when a coupon code was entered.
             'coupon' => $totals->meta['coupon'] ?? null,
+            // The customer group's minimum order, while the products fall short of it.
+            'minimum_order' => MoneyPresenter::present(app(PriceResolver::class)->customerGroup()?->minimumOrderShortfall($totals->subtotal)),
         ];
     }
 

@@ -16,8 +16,15 @@ use PnShop\Catalog\Policies\AttributePolicy;
 use PnShop\Catalog\Policies\BrandPolicy;
 use PnShop\Catalog\Policies\CategoryPolicy;
 use PnShop\Catalog\Policies\OptionPolicy;
+use PnShop\Catalog\Policies\PriceListPolicy;
 use PnShop\Catalog\Policies\ProductPolicy;
+use PnShop\Catalog\Pricing\Models\PriceList;
+use PnShop\Catalog\Pricing\PriceDisplay;
+use PnShop\Catalog\Pricing\PriceResolver;
+use PnShop\Catalog\Pricing\Stages\PriceListPrice;
+use PnShop\Catalog\Pricing\Stages\SalePrice;
 use PnShop\Foundation\Extension\Permission;
+use PnShop\Foundation\Extension\PipelineRegistry;
 use PnShop\Foundation\ModuleServiceProvider;
 
 /**
@@ -36,11 +43,16 @@ class CatalogServiceProvider extends ModuleServiceProvider
             new Permission('catalog.brands.manage', 'Manage brands', 'Catalog'),
             new Permission('catalog.options.manage', 'Manage variant options', 'Catalog'),
             new Permission('catalog.attributes.manage', 'Manage attributes', 'Catalog'),
+            new Permission('catalog.prices.manage', 'Manage price lists', 'Catalog'),
         ];
     }
 
     public function register(): void
     {
+        // One per request or queued job: it knows the customer and keeps their quotes.
+        $this->app->scoped(PriceResolver::class);
+        $this->app->scoped(PriceDisplay::class);
+
         Relation::morphMap([
             'product' => Product::class,
             'category' => Category::class,
@@ -55,9 +67,14 @@ class CatalogServiceProvider extends ModuleServiceProvider
 
     protected function bootModule(): void
     {
+        $pipelines = $this->app->make(PipelineRegistry::class);
+        $pipelines->stage(PriceResolver::PIPELINE, SalePrice::class, 100);
+        $pipelines->stage(PriceResolver::PIPELINE, PriceListPrice::class, 200);
+
         Gate::policy(Product::class, ProductPolicy::class);
         Gate::policy(Category::class, CategoryPolicy::class);
         Gate::policy(Brand::class, BrandPolicy::class);
+        Gate::policy(PriceList::class, PriceListPolicy::class);
         Gate::policy(Option::class, OptionPolicy::class);
         Gate::policy(ProductAttribute::class, AttributePolicy::class);
     }

@@ -4,8 +4,9 @@ namespace PnShop\Catalog\Presenters;
 
 use PnShop\Catalog\Models\Product;
 use PnShop\Catalog\Models\ProductVariant;
+use PnShop\Catalog\Pricing\PriceDisplay;
+use PnShop\Catalog\Pricing\PriceResolver;
 use PnShop\Media\MediaPresenter;
-use PnShop\Money\MoneyPresenter;
 
 /**
  * The product shape used by listings (home, shop, related products).
@@ -22,13 +23,16 @@ final class ProductCardPresenter
     public static function present(Product $product): array
     {
         $variant = self::displayedVariant($product);
+        $display = app(PriceDisplay::class);
 
         return [
             'id' => $product->id,
             'title' => $product->title,
             'slug' => $product->slug,
-            'price' => MoneyPresenter::present($variant?->price),
-            'sale_price' => $variant?->isOnSale() ? MoneyPresenter::present($variant->sale_price) : null,
+            // As this customer sees prices: null when hidden from guests, with or without tax.
+            'price' => $display->present($variant?->price, $product->tax_class_id),
+            'sale_price' => $variant?->isOnSale() ? $display->present($variant->unitPrice(), $product->tax_class_id) : null,
+            'price_includes_tax' => $display->includesTax(),
             'price_from' => $product->hasVaryingPrices(),
             'image' => self::mainImage($product),
             'stock' => $product->stock,
@@ -40,6 +44,20 @@ final class ProductCardPresenter
                 'slug' => $product->category->slug,
             ] : null,
         ];
+    }
+
+    /**
+     * Cards for a listing; prices of all its variants are read at once.
+     *
+     * @param  iterable<Product>  $products
+     * @return list<array<string, mixed>>
+     */
+    public static function presentMany(iterable $products): array
+    {
+        $products = collect($products);
+        app(PriceResolver::class)->primeProducts($products);
+
+        return array_values($products->map(fn (Product $product) => self::present($product))->all());
     }
 
     /**

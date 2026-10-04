@@ -10,10 +10,10 @@ use PnShop\Catalog\Models\Category;
 use PnShop\Catalog\Models\Product;
 use PnShop\Catalog\Models\ProductVariant;
 use PnShop\Catalog\Presenters\ProductCardPresenter;
+use PnShop\Catalog\Pricing\PriceDisplay;
 use PnShop\Cms\Models\Page;
 use PnShop\Localization\Localization;
 use PnShop\Localization\Models\Language;
-use PnShop\Money\Prices;
 
 /**
  * Fills the SEO data for the storefront's standard pages.
@@ -49,7 +49,7 @@ final class CatalogSeo
 
         /** @var Collection<int, ProductVariant> $variants */
         $variants = $product->variants;
-        $prices = $variants->map(fn (ProductVariant $variant) => Prices::effective($variant->price, $variant->sale_price))->sortBy(fn ($price) => $price->getMinorAmount()->toInt())->values();
+        $prices = $variants->map(fn (ProductVariant $variant) => $variant->unitPrice())->sortBy(fn ($price) => $price->getMinorAmount()->toInt())->values();
         $default = $product->defaultVariant();
 
         $this->seo->title($product->getAttribute('meta_title') ?: $product->title)
@@ -60,7 +60,8 @@ final class CatalogSeo
             ->languageLinks($alternates)
             ->canonical($url);
 
-        if ($prices->isNotEmpty()) {
+        // Search engines see what guests see: no offer when prices are for signed-in customers.
+        if ($prices->isNotEmpty() && app(PriceDisplay::class)->visible()) {
             $this->seo->jsonLd(Schema::product(
                 $product->title,
                 $product->description,

@@ -10,6 +10,8 @@ use PnShop\Cart\ShoppingCartService;
 use PnShop\Cart\Totals\CartCalculator;
 use PnShop\Cart\Totals\TotalLine;
 use PnShop\Catalog\Models\ProductVariant;
+use PnShop\Catalog\Pricing\PriceDisplay;
+use PnShop\Catalog\Pricing\PriceResolver;
 use PnShop\Customer\Models\CustomerAddress;
 use PnShop\Customer\Models\User;
 use PnShop\Customer\PostalAddress;
@@ -72,6 +74,13 @@ class CheckoutService
 
         $shipping = PostalAddress::fromArray($data['shipping']);
         $billing = ($data['billing_same_as_shipping'] ?? true) || empty($data['billing']) ? $shipping : PostalAddress::fromArray($data['billing']);
+
+        // Prices are those of the customer placing the order (their group), or a guest's.
+        app(PriceResolver::class)->forCustomer($user);
+
+        if (! app(PriceDisplay::class)->visible()) {
+            throw new CheckoutException(__('Please sign in to see prices and order.'));
+        }
 
         $order = DB::transaction(function () use ($data, $user, $shipping, $billing) {
             // The cart is locked and emptied in this transaction: a double submit cannot place
@@ -140,8 +149,9 @@ class CheckoutService
                     'variant_label' => $variant->label() ?: null,
                     'quantity' => $quantity,
                     'currency' => $currency,
+                    // What this customer pays at this quantity; sale_price holds it when it is below the price.
                     'price' => $variant->price,
-                    'sale_price' => $variant->isOnSale() ? $variant->sale_price : null,
+                    'sale_price' => $variant->isOnSale($quantity) ? $variant->unitPrice($quantity) : null,
                 ]);
 
                 $items->push(CartItemDTO::fromVariant($variant, $quantity));
@@ -156,6 +166,12 @@ class CheckoutService
                 'user' => $user,
                 'email' => $data['email'],
             ]));
+
+            $minimum = app(PriceResolver::class)->customerGroup()?->minimumOrderShortfall($totals->subtotal);
+
+            if ($minimum !== null) {
+                throw new CheckoutException(__('The minimum order is :amount. Please add more products.', ['amount' => $minimum->formatToLocale(app()->getLocale())]));
+            }
 
             $method = PaymentMethod::query()->find((int) $data['payment_method_id']);
 
