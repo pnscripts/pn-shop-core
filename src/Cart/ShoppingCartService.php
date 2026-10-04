@@ -128,7 +128,7 @@ class ShoppingCartService
      */
     public function totals(array $context = []): CartTotals
     {
-        return $this->calculator->calculate($this->getCartItems(), app(Localization::class)->defaultCurrency()->code, $this->context($context));
+        return $this->calculator->calculate($this->getCartItems(), app(Localization::class)->currency()->code, $this->context($context));
     }
 
     /**
@@ -272,7 +272,7 @@ class ShoppingCartService
     {
         return ProductVariant::query()
             ->where('is_active', true)
-            ->whereHas('product', fn (Builder $product) => $product->where('is_active', true));
+            ->whereHas('product', fn (Builder $product) => $product->where('is_active', true)->inChannel());
     }
 
     private function assertQuantityAvailable(int $variantId, int $quantity): void

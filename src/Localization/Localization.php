@@ -27,6 +27,15 @@ final class Localization
     /** @var (\Closure(string): ?string)|null */
     private ?\Closure $alternateResolver = null;
 
+    /** @var (\Closure(): array{0: string|null, 1: list<string>|null})|null */
+    private ?\Closure $restriction = null;
+
+    /** @var (\Closure(): ?string)|null */
+    private ?\Closure $currencyResolver = null;
+
+    /** @var array<string, Currency|null> */
+    private array $currencies = [];
+
     public function __construct(private Cache $cache) {}
 
     /**
@@ -36,8 +45,34 @@ final class Localization
      */
     public function languages(): Collection
     {
-        return collect($this->data()['languages'])
+        $languages = collect($this->data()['languages'])
             ->map(fn (array $attributes) => (new Language)->forceFill($attributes));
+
+        if ($this->restriction === null) {
+            return $languages;
+        }
+
+        // A channel limits the languages and may put another one first.
+        [$default, $allowed] = ($this->restriction)();
+        $kept = $allowed === null ? $languages : $languages->filter(fn (Language $language) => in_array($language->code, $allowed, true));
+
+        if ($kept->isEmpty()) {
+            return $languages;
+        }
+
+        return $default !== null && $kept->contains('code', $default)
+            ? $kept->sortBy(fn (Language $language) => $language->code === $default ? 0 : 1, SORT_NUMERIC, false)->values()
+            : $kept->values();
+    }
+
+    /**
+     * Let the active channel limit the languages.
+     *
+     * @param  \Closure(): array{0: string|null, 1: list<string>|null}  $restriction  [default locale, allowed locales]
+     */
+    public function restrictUsing(\Closure $restriction): void
+    {
+        $this->restriction = $restriction;
     }
 
     public function defaultLocale(): string
@@ -91,6 +126,35 @@ final class Localization
         return $this->alternateResolver === null ? null : ($this->alternateResolver)($locale);
     }
 
+    /**
+     * The currency of this request: the channel's, or the default one.
+     */
+    public function currency(): Currency
+    {
+        $code = $this->currencyResolver !== null ? ($this->currencyResolver)() : null;
+        $default = $this->defaultCurrency();
+
+        if ($code === null || $code === $default->code) {
+            return $default;
+        }
+
+        if (! array_key_exists($code, $this->currencies)) {
+            $this->currencies[$code] = Currency::query()->where('code', $code)->where('is_active', true)->first();
+        }
+
+        return $this->currencies[$code] ?? $default;
+    }
+
+    /**
+     * Let the active channel choose the currency.
+     *
+     * @param  \Closure(): ?string  $resolver  a currency code, or null for the default
+     */
+    public function currencyUsing(\Closure $resolver): void
+    {
+        $this->currencyResolver = $resolver;
+    }
+
     public function defaultCurrency(): Currency
     {
         $attributes = $this->data()['currency'] ?? throw new RuntimeException('No default currency is configured.');
@@ -100,6 +164,7 @@ final class Localization
 
     public function flush(): void
     {
+        $this->currencies = [];
         $this->data = null;
         $this->cache->forget(self::CACHE_KEY);
     }

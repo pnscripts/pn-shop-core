@@ -12,6 +12,7 @@ use PnShop\Cart\Totals\TotalLine;
 use PnShop\Catalog\Models\ProductVariant;
 use PnShop\Catalog\Pricing\PriceDisplay;
 use PnShop\Catalog\Pricing\PriceResolver;
+use PnShop\Channel\Channels;
 use PnShop\Customer\Models\CustomerAddress;
 use PnShop\Customer\Models\User;
 use PnShop\Customer\PostalAddress;
@@ -104,10 +105,12 @@ class CheckoutService
                 ->get()
                 ->keyBy('id');
 
-            $currency = app(Localization::class)->defaultCurrency()->code;
+            // The channel's currency: the cart was priced in it.
+            $currency = app(Localization::class)->currency()->code;
 
             $order = Order::create([
                 'user_id' => $user?->id,
+                'channel_id' => app(Channels::class)->current()->id,
                 'name' => $shipping->fullName(),
                 'email' => $data['email'],
                 'phone' => (string) $shipping->phone,
@@ -131,7 +134,7 @@ class CheckoutService
             foreach ($lines as $variantId => $quantity) {
                 $variant = $variants->get($variantId);
 
-                if (! $variant || ! $variant->is_active || ! $variant->product->is_active) {
+                if (! $variant || ! $variant->is_active || ! $variant->product->is_active || ! $variant->product->isVisibleInChannel()) {
                     throw new CheckoutException(__('A product in your cart is no longer available. Please review your cart.'));
                 }
 
@@ -145,7 +148,7 @@ class CheckoutService
                     'quantity' => $quantity,
                     'currency' => $currency,
                     // What this customer pays at this quantity; sale_price holds it when it is below the price.
-                    'price' => $variant->price,
+                    'price' => $variant->regularPrice(),
                     'sale_price' => $variant->isOnSale($quantity) ? $variant->unitPrice($quantity) : null,
                 ]), $variant, $quantity];
 
