@@ -175,10 +175,14 @@ class CheckoutService
                 }
             }
 
+            $method = isset($data['payment_method_id']) ? PaymentMethod::query()->find((int) $data['payment_method_id']) : null;
+
             $totals = $this->calculator->calculate($items, $currency, $this->cart->context([
                 'shipping_address' => $shipping,
                 'billing_address' => $billing,
                 'shipping_method' => $shippingMethod,
+                // Cash on delivery: couriers that charge for collecting the money add their fee.
+                'payment_method' => $method,
                 'user' => $user,
                 'email' => $data['email'],
             ]));
@@ -192,7 +196,6 @@ class CheckoutService
             // Gift cards and store credit pay first; the payment method pays the rest.
             $balances = app(CartBalances::class);
             $due = $totals->total()->minus($balances->covered($totals->total(), $user));
-            $method = isset($data['payment_method_id']) ? PaymentMethod::query()->find((int) $data['payment_method_id']) : null;
 
             if ($due->isPositive()) {
                 if ($method === null) {
@@ -266,7 +269,7 @@ class CheckoutService
         $method = ShippingMethod::query()->find((int) ($data['shipping_method_id'] ?? 0));
         $subtotal = app(ThresholdSubtotal::class)->of($this->calculator->calculate($items, $currency, $this->cart->context(['user' => $user])));
 
-        if ($method === null || $this->shipping->quote($method, new ShippingRequest($items, $subtotal, $address->country_code, $address->postcode, $user)) === null) {
+        if ($method === null || $this->shipping->quote($method, new ShippingRequest($items, $subtotal, $address->country_code, $address->postcode, $user, $address->city)) === null) {
             throw new CheckoutException(__('Please choose a delivery option for this address.'));
         }
 

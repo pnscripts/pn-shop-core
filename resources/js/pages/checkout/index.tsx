@@ -63,7 +63,14 @@ export default function Checkout({
         ...botTrap,
     });
     const fieldErrors = errors as Record<string, string | undefined>;
-    const delivery = useShippingQuote(data.shipping.country_code, data.shipping.postcode, data.shipping_method_id, cart.totals);
+    const delivery = useShippingQuote(
+        data.shipping.country_code,
+        data.shipping.postcode,
+        data.shipping_method_id,
+        cart.totals,
+        data.shipping.city,
+        data.payment_method_id,
+    );
     // Gift cards and store credit (from the quote once there is one, else from the cart).
     const balanceLines = delivery.balances ?? [
         ...(cart.gift_cards ?? []).filter((card) => card.applied).map((card) => ({ label: card.label, amount: card.applied! })),
@@ -300,7 +307,10 @@ export default function Checkout({
                     </ul>
                     <TotalsBreakdown totals={delivery.totals} />
                     <BalanceLines lines={balanceLines} amountDue={amountDue} />
-                    <Slot name="checkout.before_submit" props={{ cart, totals: delivery.totals }} />
+                    <Slot
+                        name="checkout.before_submit"
+                        props={{ cart, totals: delivery.totals, shippingMethodId: data.shipping_method_id, shipping: data.shipping }}
+                    />
                     <Button type="submit" className="w-full" disabled={processing || (shippingRequired && data.shipping_method_id === '')}>
                         {t('Place order')}
                     </Button>
